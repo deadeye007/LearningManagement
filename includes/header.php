@@ -61,6 +61,7 @@
                     <?php if (isAdmin()): ?>
                         <a href="../admin/index.php" class="text-white me-3">Admin</a>
                     <?php endif; ?>
+                        <a href="../grades.php" class="text-white me-3">My Grades</a>
                         <a href="../profile.php" class="text-white me-3">Profile</a>
                         <a href="../logout.php" class="text-white">Logout</a>
                 <?php else: ?>

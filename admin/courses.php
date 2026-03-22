@@ -20,7 +20,8 @@ if ($courses) {
         $content .= '<td>' . htmlspecialchars(substr($course['description'], 0, 100)) . '...</td>';
         $content .= '<td>';
         $content .= '<a href="course_edit.php?id=' . $course['id'] . '" class="btn btn-sm btn-primary">Edit</a> ';
-        $content .= '<a href="lessons.php?course_id=' . $course['id'] . '" class="btn btn-sm btn-secondary">Lessons</a>';
+        $content .= '<a href="lessons.php?course_id=' . $course['id'] . '" class="btn btn-sm btn-secondary">Lessons</a> ';
+        $content .= '<a href="gradebook.php?course_id=' . $course['id'] . '" class="btn btn-sm btn-outline-success">Gradebook</a>';
         $content .= '</td>';
         $content .= '</tr>';
     }

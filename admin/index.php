@@ -20,7 +20,8 @@ $content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 
 $content .= '</div>';
 
 $content .= '<div class="row mt-3">';
-$content .= '<div class="col-md-12"><div class="card"><div class="card-body"><h5 class="card-title">Quizzes</h5><p>Quizzes are managed from each lesson. Open a course, then a lesson, then use the Quiz button to create settings and questions.</p><a href="courses.php" class="btn btn-outline-primary">Open Course Manager</a></div></div></div>';
+$content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 class="card-title">Quizzes</h5><p>Quizzes are managed from each lesson. Open a course, then a lesson, then use the Quiz button to create settings and questions.</p><a href="courses.php" class="btn btn-outline-primary">Open Course Manager</a></div></div></div>';
+$content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 class="card-title">Gradebook</h5><p>Review course-level progress, quiz scores, and per-student outcomes.</p><a href="gradebook.php" class="btn btn-outline-success">Open Gradebook</a></div></div></div>';
 $content .= '</div>';
 
 include '../includes/header.php';

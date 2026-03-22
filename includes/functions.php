@@ -716,4 +716,211 @@ function gradeQuizSubmission($quiz_id, $user_id, $submitted_answers) {
         return ['success' => false, 'message' => 'Unable to submit the quiz right now.'];
     }
 }
+
+function getCourseRoster($course_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT u.id, u.username, u.email
+        FROM users u
+        LEFT JOIN user_progress up ON up.user_id = u.id
+        LEFT JOIN lessons l_progress ON up.lesson_id = l_progress.id AND l_progress.course_id = ?
+        LEFT JOIN quiz_attempts qa ON qa.user_id = u.id
+        LEFT JOIN quizzes q ON qa.quiz_id = q.id
+        LEFT JOIN lessons l_quiz ON q.lesson_id = l_quiz.id AND l_quiz.course_id = ?
+        WHERE u.role = 'user'
+          AND (l_progress.id IS NOT NULL OR l_quiz.id IS NOT NULL)
+        ORDER BY u.username ASC
+    ");
+    $stmt->execute([$course_id, $course_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getCourseLessonsWithQuizzes($course_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT l.id AS lesson_id, l.title AS lesson_title, l.order_num, q.id AS quiz_id, q.title AS quiz_title, q.passing_score
+        FROM lessons l
+        LEFT JOIN quizzes q ON q.lesson_id = l.id
+        WHERE l.course_id = ?
+        ORDER BY l.order_num ASC, l.id ASC
+    ");
+    $stmt->execute([$course_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getUserCourseGradebook($user_id, $course_id) {
+    global $pdo;
+
+    $course = getCourse($course_id);
+    if (!$course) {
+        return null;
+    }
+
+    $lessons = getCourseLessonsWithQuizzes($course_id);
+    $lessonIds = [];
+    $quizIds = [];
+
+    foreach ($lessons as $lesson) {
+        $lessonIds[] = (int)$lesson['lesson_id'];
+        if (!empty($lesson['quiz_id'])) {
+            $quizIds[] = (int)$lesson['quiz_id'];
+        }
+    }
+
+    $completedLessonIds = [];
+    if ($lessonIds) {
+        $placeholders = implode(',', array_fill(0, count($lessonIds), '?'));
+        $params = array_merge([$user_id], $lessonIds);
+        $stmt = $pdo->prepare("SELECT lesson_id FROM user_progress WHERE user_id = ? AND completed = TRUE AND lesson_id IN ($placeholders)");
+        $stmt->execute($params);
+        $completedLessonIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    $quizStats = [];
+    if ($quizIds) {
+        $placeholders = implode(',', array_fill(0, count($quizIds), '?'));
+
+        $bestParams = array_merge([$user_id], $quizIds);
+        $bestStmt = $pdo->prepare("
+            SELECT quiz_id, MAX(percentage) AS best_percentage, MAX(CASE WHEN passed = TRUE THEN 1 ELSE 0 END) AS passed_attempt
+            FROM quiz_attempts
+            WHERE user_id = ? AND quiz_id IN ($placeholders)
+            GROUP BY quiz_id
+        ");
+        $bestStmt->execute($bestParams);
+        foreach ($bestStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $quizId = (int)$row['quiz_id'];
+            if (!isset($quizStats[$quizId])) {
+                $quizStats[$quizId] = [];
+            }
+            $quizStats[$quizId]['best_percentage'] = $row['best_percentage'] !== null ? (float)$row['best_percentage'] : null;
+            $quizStats[$quizId]['passed_attempt'] = (int)$row['passed_attempt'] === 1;
+        }
+
+        $latestParams = array_merge([$user_id], $quizIds);
+        $latestStmt = $pdo->prepare("
+            SELECT qa.quiz_id, qa.percentage, qa.passed, qa.submitted_at
+            FROM quiz_attempts qa
+            INNER JOIN (
+                SELECT quiz_id, MAX(id) AS latest_id
+                FROM quiz_attempts
+                WHERE user_id = ? AND quiz_id IN ($placeholders)
+                GROUP BY quiz_id
+            ) latest ON latest.latest_id = qa.id
+        ");
+        $latestStmt->execute($latestParams);
+        foreach ($latestStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $quizId = (int)$row['quiz_id'];
+            if (!isset($quizStats[$quizId])) {
+                $quizStats[$quizId] = [];
+            }
+            $quizStats[$quizId]['latest_percentage'] = (float)$row['percentage'];
+            $quizStats[$quizId]['latest_passed'] = (int)$row['passed'] === 1;
+            $quizStats[$quizId]['latest_submitted_at'] = $row['submitted_at'];
+        }
+
+        $countParams = array_merge([$user_id], $quizIds);
+        $countStmt = $pdo->prepare("
+            SELECT quiz_id, COUNT(*) AS attempts
+            FROM quiz_attempts
+            WHERE user_id = ? AND quiz_id IN ($placeholders)
+            GROUP BY quiz_id
+        ");
+        $countStmt->execute($countParams);
+        foreach ($countStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $quizId = (int)$row['quiz_id'];
+            if (!isset($quizStats[$quizId])) {
+                $quizStats[$quizId] = [];
+            }
+            $quizStats[$quizId]['attempts'] = (int)$row['attempts'];
+        }
+    }
+
+    $completedLessons = count($completedLessonIds);
+    $totalLessons = count($lessons);
+    $quizCount = 0;
+    $passedQuizCount = 0;
+    $bestQuizPercentages = [];
+    $lessonBreakdown = [];
+
+    foreach ($lessons as $lesson) {
+        $lessonId = (int)$lesson['lesson_id'];
+        $quizId = !empty($lesson['quiz_id']) ? (int)$lesson['quiz_id'] : null;
+        $lessonCompleted = in_array($lessonId, $completedLessonIds, true);
+        $lessonQuizStats = $quizId && isset($quizStats[$quizId]) ? $quizStats[$quizId] : null;
+
+        if ($quizId) {
+            $quizCount++;
+            if (!empty($lessonQuizStats['passed_attempt'])) {
+                $passedQuizCount++;
+            }
+            if (isset($lessonQuizStats['best_percentage'])) {
+                $bestQuizPercentages[] = (float)$lessonQuizStats['best_percentage'];
+            }
+        }
+
+        $lessonBreakdown[] = [
+            'lesson_id' => $lessonId,
+            'lesson_title' => $lesson['lesson_title'],
+            'order_num' => (int)$lesson['order_num'],
+            'completed' => $lessonCompleted,
+            'quiz_id' => $quizId,
+            'quiz_title' => $lesson['quiz_title'],
+            'quiz_passing_score' => $lesson['passing_score'],
+            'quiz_best_percentage' => $lessonQuizStats['best_percentage'] ?? null,
+            'quiz_latest_percentage' => $lessonQuizStats['latest_percentage'] ?? null,
+            'quiz_attempts' => $lessonQuizStats['attempts'] ?? 0,
+            'quiz_passed' => $lessonQuizStats['passed_attempt'] ?? false
+        ];
+    }
+
+    $lessonProgressPercent = $totalLessons > 0 ? round(($completedLessons / $totalLessons) * 100, 1) : 0;
+    $quizAveragePercent = $bestQuizPercentages ? round(array_sum($bestQuizPercentages) / count($bestQuizPercentages), 1) : null;
+
+    return [
+        'course' => $course,
+        'lessons' => $lessonBreakdown,
+        'summary' => [
+            'completed_lessons' => $completedLessons,
+            'total_lessons' => $totalLessons,
+            'lesson_progress_percent' => $lessonProgressPercent,
+            'quizzes_passed' => $passedQuizCount,
+            'total_quizzes' => $quizCount,
+            'quiz_average_percent' => $quizAveragePercent
+        ]
+    ];
+}
+
+function getCourseGradebook($course_id) {
+    $course = getCourse($course_id);
+    if (!$course) {
+        return null;
+    }
+
+    $roster = getCourseRoster($course_id);
+    $students = [];
+
+    foreach ($roster as $student) {
+        $gradebook = getUserCourseGradebook((int)$student['id'], $course_id);
+        if ($gradebook === null) {
+            continue;
+        }
+
+        $students[] = [
+            'id' => (int)$student['id'],
+            'username' => $student['username'],
+            'email' => $student['email'],
+            'summary' => $gradebook['summary']
+        ];
+    }
+
+    usort($students, function ($left, $right) {
+        return strcmp($left['username'], $right['username']);
+    });
+
+    return [
+        'course' => $course,
+        'students' => $students
+    ];
+}
 ?>
