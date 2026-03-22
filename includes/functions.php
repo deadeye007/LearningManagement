@@ -8,9 +8,27 @@ function isLoggedIn() {
 
 function getUser($user_id) {
     global $pdo;
-    $stmt = $pdo->prepare("SELECT id, username, email, created_at FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, username, email, role, created_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function isAdmin() {
+    if (!isLoggedIn()) {
+        return false;
+    }
+    $user = getUser($_SESSION['user_id']);
+    return $user && $user['role'] === 'admin';
+}
+
+// Regenerate session ID periodically to prevent session hijacking
+function regenerateSession() {
+    if (!isset($_SESSION['last_regeneration'])) {
+        $_SESSION['last_regeneration'] = time();
+    } elseif (time() - $_SESSION['last_regeneration'] > 1800) { // 30 minutes
+        session_regenerate_id(true);
+        $_SESSION['last_regeneration'] = time();
+    }
 }
 
 function getCourses() {

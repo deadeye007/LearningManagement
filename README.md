@@ -8,6 +8,7 @@ A PHP-based learning platform with courses, lessons, quizzes, and user progress 
 - Lesson viewing with progress tracking
 - Quizzes
 - Discussion forums (basic)
+- Admin panel for content management
 - Accessible design with light/dark mode support
 
 ## Setup with Docker
@@ -24,6 +25,11 @@ A PHP-based learning platform with courses, lessons, quizzes, and user progress 
 5. Update database credentials in `includes/db.php` if needed.
 6. Run the application: `php -S localhost:8000` in the project directory.
 7. Open http://localhost:8000 in your browser.
+
+## Admin Access
+- Login with username: `admin`, password: `password`
+- Access admin panel at `/admin/` after logging in
+- Manage courses, lessons, and users
 
 ## Security Notes
 - Passwords are hashed using `password_hash()`.
