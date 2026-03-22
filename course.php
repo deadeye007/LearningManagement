@@ -15,7 +15,8 @@ if (!$course) {
 } else {
     $title = htmlspecialchars($course['title']);
     $content = '<h2>' . $title . '</h2>';
-    $content .= '<p>' . htmlspecialchars($course['description']) . '</p>';
+    // description is sanitized at creation/edit-time
+    $content .= '<div>' . $course['description'] . '</div>';
 
     $lessons = getLessons($course_id);
     if ($lessons) {

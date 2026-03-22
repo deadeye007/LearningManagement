@@ -76,6 +76,27 @@ function sanitizeInput($data) {
     return htmlspecialchars(strip_tags(trim($data)));
 }
 
+// Sanitize HTML content for rich text (course/lesson descriptions)
+function sanitizeHTML($html) {
+    // Allow safe tags needed for formatting
+    $allowed_tags = '<p><br><strong><b><em><i><ul><ol><li><a><img><h1><h2><h3><h4><h5><h6><blockquote><code><pre><span><div><table><thead><tbody><tr><th><td>';
+    // Strip disallowed tags
+    $safe = strip_tags($html, $allowed_tags);
+    // Remove event handlers and javascript: URIs
+    $safe = preg_replace('/ on\w+="[^"]*"/i', '', $safe);
+    $safe = preg_replace('/ on\w+=\'[^\']*\'/i', '', $safe);
+    $safe = preg_replace('/ on\w+=[^\s>]+/i', '', $safe);
+    $safe = preg_replace('/javascript:/i', '', $safe);
+    // ensure href/src are not dangerous
+    $safe = preg_replace_callback('/<(a|img)[^>]+>/i', function ($matches) {
+        $tag = $matches[0];
+        $tag = preg_replace('/(href|src)="\s*javascript:[^\"]*"/i', '$1="#"', $tag);
+        return $tag;
+    }, $safe);
+
+    return $safe;
+}
+
 // Rate limiting: Check if login attempt should be blocked
 function isLoginBlocked($username, $ip) {
     global $pdo;

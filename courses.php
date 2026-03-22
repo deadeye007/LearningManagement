@@ -13,7 +13,7 @@ if ($courses) {
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">' . htmlspecialchars($course['title']) . '</h5>
-                        <p class="card-text">' . htmlspecialchars($course['description']) . '</p>
+                        <p class="card-text">' . strip_tags($course['description'], '<strong><em><b><i><u>') . '</p>
                         <a href="course.php?id=' . $course['id'] . '" class="btn btn-primary">View Course</a>
                     </div>
                 </div>

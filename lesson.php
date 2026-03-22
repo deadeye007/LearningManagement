@@ -21,7 +21,8 @@ if (!$lesson) {
     $title = htmlspecialchars($lesson['title']);
     $content = '<h2>' . $title . '</h2>';
     $content .= '<p>Course: ' . htmlspecialchars($lesson['course_title']) . '</p>';
-    $content .= '<div>' . nl2br(htmlspecialchars($lesson['content'])) . '</div>';
+    // Lesson content is sanitized at save; render as HTML
+    $content .= '<div>' . $lesson['content'] . '</div>';
 
     if (isLoggedIn()) {
         $progress = getUserProgress($_SESSION['user_id'], $lesson_id);
