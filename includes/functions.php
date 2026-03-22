@@ -1,5 +1,6 @@
 <?php
 require_once 'security.php';
+require_once __DIR__ . '/../config.php';
 
 // Helper functions
 function isLoggedIn() {
@@ -78,23 +79,61 @@ function sanitizeInput($data) {
 
 // Sanitize HTML content for rich text (course/lesson descriptions)
 function sanitizeHTML($html) {
-    // Allow safe tags needed for formatting
-    $allowed_tags = '<p><br><strong><b><em><i><ul><ol><li><a><img><h1><h2><h3><h4><h5><h6><blockquote><code><pre><span><div><table><thead><tbody><tr><th><td>';
-    // Strip disallowed tags
+    // Allowed tags set in config
+    $allowed_tags = defined('ALLOWED_HTML_TAGS') ? ALLOWED_HTML_TAGS : '<p><br><strong><b><em><i><u><ul><ol><li><a><img><h1><h2><h3><h4><h5><h6><blockquote><code><pre><span><div><table><thead><tbody><tr><th><td>';
     $safe = strip_tags($html, $allowed_tags);
-    // Remove event handlers and javascript: URIs
     $safe = preg_replace('/ on\w+="[^"]*"/i', '', $safe);
     $safe = preg_replace('/ on\w+=\'[^\']*\'/i', '', $safe);
     $safe = preg_replace('/ on\w+=[^\s>]+/i', '', $safe);
     $safe = preg_replace('/javascript:/i', '', $safe);
-    // ensure href/src are not dangerous
     $safe = preg_replace_callback('/<(a|img)[^>]+>/i', function ($matches) {
         $tag = $matches[0];
         $tag = preg_replace('/(href|src)="\s*javascript:[^\"]*"/i', '$1="#"', $tag);
         return $tag;
     }, $safe);
-
     return $safe;
+}
+
+// Markdown support (Simple converter for admin content when enabled)
+function markdownToHtml($markdown) {
+    $html = htmlspecialchars($markdown);
+
+    // Convert headings
+    for ($i = 6; $i >= 1; $i--) {
+        $pattern = '/^' . str_repeat('#', $i) . '\s*(.+)$/m';
+        $html = preg_replace($pattern, '<h' . $i . '>$1</h' . $i . '>', $html);
+    }
+
+    // Convert bold/italic
+    $html = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $html);
+    $html = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $html);
+    $html = preg_replace('/__(.+?)__/s', '<strong>$1</strong>', $html);
+    $html = preg_replace('/_(.+?)_/s', '<em>$1</em>', $html);
+
+    // Convert links [text](url)
+    $html = preg_replace('/\[(.*?)\]\((.*?)\)/', '<a href="$2">$1</a>', $html);
+
+    // Convert unordered lists
+    if (preg_match('/^\s*\*\s+/m', $markdown)) {
+        $html = preg_replace_callback('/((?:^\s*\*\s+.+(?:\R|$))+)/m', function ($matches) {
+            $items = preg_replace('/^\s*\*\s+(.+)/m', '<li>$1</li>', $matches[1]);
+            return '<ul>' . $items . '</ul>';
+        }, $html);
+    }
+
+    // Convert paragraphs
+    $paragraphs = preg_split('/\n{2,}/', $html);
+    $html = '';
+    foreach ($paragraphs as $p) {
+        $trimmed = trim($p);
+        if ($trimmed !== '' && !preg_match('/^<h\d|<ul|<ol|<blockquote|<pre|<p|<table/', $trimmed)) {
+            $html .= '<p>' . $trimmed . '</p>';
+        } else {
+            $html .= $trimmed;
+        }
+    }
+
+    return $html;
 }
 
 // Rate limiting: Check if login attempt should be blocked

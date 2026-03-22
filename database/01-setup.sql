@@ -17,6 +17,7 @@ CREATE TABLE courses (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     instructor_id INT,
+    editor_mode ENUM('rich','markdown') DEFAULT 'rich',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (instructor_id) REFERENCES users(id)
 );
@@ -28,6 +29,7 @@ CREATE TABLE lessons (
     title VARCHAR(255) NOT NULL,
     content TEXT,
     order_num INT,
+    editor_mode ENUM('inherit','rich','markdown') DEFAULT 'inherit',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (course_id) REFERENCES courses(id)
 );
