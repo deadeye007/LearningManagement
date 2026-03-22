@@ -19,5 +19,9 @@ $content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 
 $content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 class="card-title">System Health</h5><p>Monitor system status</p><a href="system_status.php" class="btn btn-info">System Status</a></div></div></div>';
 $content .= '</div>';
 
+$content .= '<div class="row mt-3">';
+$content .= '<div class="col-md-12"><div class="card"><div class="card-body"><h5 class="card-title">Quizzes</h5><p>Quizzes are managed from each lesson. Open a course, then a lesson, then use the Quiz button to create settings and questions.</p><a href="courses.php" class="btn btn-outline-primary">Open Course Manager</a></div></div></div>';
+$content .= '</div>';
+
 include '../includes/header.php';
 ?>

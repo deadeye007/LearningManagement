@@ -20,13 +20,16 @@ $content .= '<a href="lesson_edit.php?course_id=' . $course_id . '" class="btn b
 $lessons = getLessons($course_id);
 if ($lessons) {
     $content .= '<div class="table-responsive"><table class="table table-striped">';
-    $content .= '<thead><tr><th>Order</th><th>Title</th><th>Actions</th></tr></thead><tbody>';
+    $content .= '<thead><tr><th>Order</th><th>Title</th><th>Quiz</th><th>Actions</th></tr></thead><tbody>';
     foreach ($lessons as $lesson) {
+        $lessonQuiz = getQuizByLesson($lesson['id'], true);
         $content .= '<tr>';
         $content .= '<td>' . $lesson['order_num'] . '</td>';
         $content .= '<td>' . htmlspecialchars($lesson['title']) . '</td>';
+        $content .= '<td>' . ($lessonQuiz ? htmlspecialchars($lessonQuiz['title']) : '<span class="text-muted">No quiz</span>') . '</td>';
         $content .= '<td>';
-        $content .= '<a href="lesson_edit.php?id=' . $lesson['id'] . '&course_id=' . $course_id . '" class="btn btn-sm btn-primary">Edit</a>';
+        $content .= '<a href="lesson_edit.php?id=' . $lesson['id'] . '&course_id=' . $course_id . '" class="btn btn-sm btn-primary">Edit</a> ';
+        $content .= '<a href="quiz_edit.php?lesson_id=' . $lesson['id'] . '" class="btn btn-sm btn-outline-secondary">Quiz</a>';
         $content .= '</td>';
         $content .= '</tr>';
     }

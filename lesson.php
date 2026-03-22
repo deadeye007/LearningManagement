@@ -24,6 +24,43 @@ if (!$lesson) {
     // Lesson content is sanitized at save; render as HTML
     $content .= '<div>' . $lesson['content'] . '</div>';
 
+    $quiz = getQuizByLesson($lesson_id);
+    if ($quiz) {
+        $content .= '<hr>';
+        $content .= '<section class="mt-4">';
+        $content .= '<h3>' . htmlspecialchars($quiz['title']) . '</h3>';
+        if (!empty($quiz['description'])) {
+            $content .= '<p>' . nl2br(htmlspecialchars($quiz['description'])) . '</p>';
+        }
+
+        if (isLoggedIn()) {
+            $latestAttempt = getQuizLatestAttempt($_SESSION['user_id'], $quiz['id']);
+            $attemptCount = getQuizAttemptCount($_SESSION['user_id'], $quiz['id']);
+            $remainingAttempts = empty($quiz['max_attempts']) ? null : ((int)$quiz['max_attempts'] - $attemptCount);
+
+            if ($latestAttempt) {
+                $content .= '<p><strong>Latest attempt:</strong> ' . htmlspecialchars((string)$latestAttempt['percentage']) . '% (' . ((int)$latestAttempt['passed'] === 1 ? 'Passed' : 'Not passed') . ')</p>';
+            } else {
+                $content .= '<p>No attempts yet.</p>';
+            }
+
+            $content .= '<p><strong>Passing score:</strong> ' . (int)$quiz['passing_score'] . '%';
+            if (!empty($quiz['max_attempts'])) {
+                $content .= ' | <strong>Attempts remaining:</strong> ' . max(0, $remainingAttempts);
+            }
+            $content .= '</p>';
+
+            if (canUserAttemptQuiz($_SESSION['user_id'], $quiz)) {
+                $content .= '<p><a href="quiz.php?id=' . $quiz['id'] . '" class="btn btn-primary">Take Quiz</a></p>';
+            } else {
+                $content .= '<p class="text-warning">You have used all available attempts for this quiz.</p>';
+            }
+        } else {
+            $content .= '<p><a href="login.php" class="btn btn-primary">Log In to Take Quiz</a></p>';
+        }
+        $content .= '</section>';
+    }
+
     if (isLoggedIn()) {
         $progress = getUserProgress($_SESSION['user_id'], $lesson_id);
         if (!$progress || !$progress['completed']) {

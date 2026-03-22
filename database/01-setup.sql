@@ -49,30 +49,67 @@ CREATE TABLE user_progress (
 -- Quizzes table
 CREATE TABLE quizzes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    lesson_id INT,
+    lesson_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    passing_score INT NOT NULL DEFAULT 70,
+    time_limit_seconds INT NULL,
+    max_attempts INT NULL,
+    is_published BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_quiz_lesson (lesson_id),
     FOREIGN KEY (lesson_id) REFERENCES lessons(id)
 );
 
 -- Quiz questions table
 CREATE TABLE quiz_questions (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    quiz_id INT,
-    question TEXT NOT NULL,
-    options JSON, -- Store options as JSON array
-    correct_answer INT, -- Index of correct option
+    quiz_id INT NOT NULL,
+    question_text TEXT NOT NULL,
+    question_type ENUM('multiple_choice') NOT NULL DEFAULT 'multiple_choice',
+    points INT NOT NULL DEFAULT 1,
+    order_num INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
+);
+
+-- Quiz answers table
+CREATE TABLE quiz_answers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    question_id INT NOT NULL,
+    answer_text TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    order_num INT NOT NULL DEFAULT 1,
+    FOREIGN KEY (question_id) REFERENCES quiz_questions(id)
 );
 
 -- Quiz attempts table
 CREATE TABLE quiz_attempts (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    quiz_id INT,
-    score INT,
-    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id INT NOT NULL,
+    quiz_id INT NOT NULL,
+    score INT NOT NULL DEFAULT 0,
+    max_score INT NOT NULL DEFAULT 0,
+    percentage DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    passed BOOLEAN NOT NULL DEFAULT FALSE,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
+);
+
+-- Quiz attempt responses table
+CREATE TABLE quiz_attempt_responses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    attempt_id INT NOT NULL,
+    question_id INT NOT NULL,
+    selected_answer_id INT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    points_awarded INT NOT NULL DEFAULT 0,
+    FOREIGN KEY (attempt_id) REFERENCES quiz_attempts(id),
+    FOREIGN KEY (question_id) REFERENCES quiz_questions(id),
+    FOREIGN KEY (selected_answer_id) REFERENCES quiz_answers(id)
 );
 
 -- Forums table (basic)

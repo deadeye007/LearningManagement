@@ -332,4 +332,372 @@ function verifyTOTPCode($secret, $code) {
 
     return false;
 }
+
+function getQuizByLesson($lesson_id, $includeUnpublished = false) {
+    global $pdo;
+    $sql = "SELECT * FROM quizzes WHERE lesson_id = ?";
+    if (!$includeUnpublished) {
+        $sql .= " AND is_published = TRUE";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$lesson_id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getQuiz($quiz_id, $includeUnpublished = false) {
+    global $pdo;
+    $sql = "SELECT q.*, l.title AS lesson_title, l.course_id, c.title AS course_title
+            FROM quizzes q
+            JOIN lessons l ON q.lesson_id = l.id
+            JOIN courses c ON l.course_id = c.id
+            WHERE q.id = ?";
+    if (!$includeUnpublished) {
+        $sql .= " AND q.is_published = TRUE";
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$quiz_id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getQuizQuestions($quiz_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY order_num ASC, id ASC");
+    $stmt->execute([$quiz_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getQuizQuestionsWithAnswers($quiz_id) {
+    global $pdo;
+    $questions = getQuizQuestions($quiz_id);
+    $answerStmt = $pdo->prepare("SELECT * FROM quiz_answers WHERE question_id = ? ORDER BY order_num ASC, id ASC");
+
+    foreach ($questions as &$question) {
+        $answerStmt->execute([$question['id']]);
+        $question['answers'] = $answerStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    return $questions;
+}
+
+function getQuizQuestion($question_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT qq.*, q.lesson_id, q.title AS quiz_title
+        FROM quiz_questions qq
+        JOIN quizzes q ON qq.quiz_id = q.id
+        WHERE qq.id = ?
+    ");
+    $stmt->execute([$question_id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getQuizAnswers($question_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM quiz_answers WHERE question_id = ? ORDER BY order_num ASC, id ASC");
+    $stmt->execute([$question_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getQuizAttemptHistory($user_id, $quiz_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT *
+        FROM quiz_attempts
+        WHERE user_id = ? AND quiz_id = ?
+        ORDER BY submitted_at DESC, id DESC
+    ");
+    $stmt->execute([$user_id, $quiz_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getQuizLatestAttempt($user_id, $quiz_id) {
+    $attempts = getQuizAttemptHistory($user_id, $quiz_id);
+    return $attempts ? $attempts[0] : null;
+}
+
+function getQuizAttemptCount($user_id, $quiz_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?");
+    $stmt->execute([$user_id, $quiz_id]);
+    return (int)$stmt->fetchColumn();
+}
+
+function canUserAttemptQuiz($user_id, $quiz) {
+    if (!$quiz) {
+        return false;
+    }
+
+    if (empty($quiz['max_attempts'])) {
+        return true;
+    }
+
+    return getQuizAttemptCount($user_id, $quiz['id']) < (int)$quiz['max_attempts'];
+}
+
+function getQuizAttemptById($attempt_id, $user_id = null) {
+    global $pdo;
+    $sql = "
+        SELECT qa.*, q.title AS quiz_title, q.passing_score, q.lesson_id, l.title AS lesson_title, l.course_id, c.title AS course_title
+        FROM quiz_attempts qa
+        JOIN quizzes q ON qa.quiz_id = q.id
+        JOIN lessons l ON q.lesson_id = l.id
+        JOIN courses c ON l.course_id = c.id
+        WHERE qa.id = ?
+    ";
+    $params = [$attempt_id];
+
+    if ($user_id !== null) {
+        $sql .= " AND qa.user_id = ?";
+        $params[] = $user_id;
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getQuizAttemptResponses($attempt_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT qar.*, qq.question_text, qq.points, qa.answer_text AS selected_answer_text, correct.answer_text AS correct_answer_text
+        FROM quiz_attempt_responses qar
+        JOIN quiz_questions qq ON qar.question_id = qq.id
+        LEFT JOIN quiz_answers qa ON qar.selected_answer_id = qa.id
+        LEFT JOIN quiz_answers correct ON correct.question_id = qq.id AND correct.is_correct = TRUE
+        WHERE qar.attempt_id = ?
+        ORDER BY qq.order_num ASC, qq.id ASC
+    ");
+    $stmt->execute([$attempt_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function saveQuiz($lesson_id, $data, $quiz_id = null) {
+    global $pdo;
+
+    $title = trim($data['title'] ?? '');
+    $description = trim($data['description'] ?? '');
+    $passing_score = (int)($data['passing_score'] ?? 70);
+    $time_limit_seconds = trim((string)($data['time_limit_seconds'] ?? ''));
+    $max_attempts = trim((string)($data['max_attempts'] ?? ''));
+    $is_published = !empty($data['is_published']) ? 1 : 0;
+
+    if ($title === '') {
+        return ['success' => false, 'message' => 'Quiz title is required.'];
+    }
+
+    if ($passing_score < 0 || $passing_score > 100) {
+        return ['success' => false, 'message' => 'Passing score must be between 0 and 100.'];
+    }
+
+    $time_limit_value = $time_limit_seconds !== '' ? max(1, (int)$time_limit_seconds) : null;
+    $max_attempts_value = $max_attempts !== '' ? max(1, (int)$max_attempts) : null;
+
+    if ($quiz_id) {
+        $stmt = $pdo->prepare("
+            UPDATE quizzes
+            SET title = ?, description = ?, passing_score = ?, time_limit_seconds = ?, max_attempts = ?, is_published = ?
+            WHERE id = ? AND lesson_id = ?
+        ");
+        $stmt->execute([$title, $description, $passing_score, $time_limit_value, $max_attempts_value, $is_published, $quiz_id, $lesson_id]);
+        return ['success' => true, 'quiz_id' => $quiz_id];
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO quizzes (lesson_id, title, description, passing_score, time_limit_seconds, max_attempts, is_published)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([$lesson_id, $title, $description, $passing_score, $time_limit_value, $max_attempts_value, $is_published]);
+    return ['success' => true, 'quiz_id' => (int)$pdo->lastInsertId()];
+}
+
+function saveQuizQuestion($quiz_id, $data, $question_id = null) {
+    global $pdo;
+
+    $question_text = trim($data['question_text'] ?? '');
+    $points = max(1, (int)($data['points'] ?? 1));
+    $order_num = max(1, (int)($data['order_num'] ?? 1));
+    $answers = $data['answers'] ?? [];
+    $correct_answer_index = isset($data['correct_answer']) ? (int)$data['correct_answer'] : -1;
+
+    if ($question_text === '') {
+        return ['success' => false, 'message' => 'Question text is required.'];
+    }
+
+    $normalizedAnswers = [];
+    foreach ($answers as $index => $answerText) {
+        $trimmed = trim($answerText);
+        if ($trimmed !== '') {
+            $normalizedAnswers[] = ['text' => $trimmed, 'original_index' => $index];
+        }
+    }
+
+    if (count($normalizedAnswers) < 2) {
+        return ['success' => false, 'message' => 'At least two answer options are required.'];
+    }
+
+    $hasCorrect = false;
+    foreach ($normalizedAnswers as $answer) {
+        if ($answer['original_index'] === $correct_answer_index) {
+            $hasCorrect = true;
+            break;
+        }
+    }
+
+    if (!$hasCorrect) {
+        return ['success' => false, 'message' => 'Select the correct answer for the question.'];
+    }
+
+    $pdo->beginTransaction();
+
+    try {
+        if ($question_id) {
+            $stmt = $pdo->prepare("
+                UPDATE quiz_questions
+                SET question_text = ?, points = ?, order_num = ?
+                WHERE id = ? AND quiz_id = ?
+            ");
+            $stmt->execute([$question_text, $points, $order_num, $question_id, $quiz_id]);
+
+            $deleteAnswers = $pdo->prepare("DELETE FROM quiz_answers WHERE question_id = ?");
+            $deleteAnswers->execute([$question_id]);
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO quiz_questions (quiz_id, question_text, points, order_num)
+                VALUES (?, ?, ?, ?)
+            ");
+            $stmt->execute([$quiz_id, $question_text, $points, $order_num]);
+            $question_id = (int)$pdo->lastInsertId();
+        }
+
+        $answerStmt = $pdo->prepare("
+            INSERT INTO quiz_answers (question_id, answer_text, is_correct, order_num)
+            VALUES (?, ?, ?, ?)
+        ");
+
+        foreach ($normalizedAnswers as $position => $answer) {
+            $answerStmt->execute([
+                $question_id,
+                $answer['text'],
+                $answer['original_index'] === $correct_answer_index ? 1 : 0,
+                $position + 1
+            ]);
+        }
+
+        $pdo->commit();
+        return ['success' => true, 'question_id' => $question_id];
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        return ['success' => false, 'message' => 'Unable to save the quiz question.'];
+    }
+}
+
+function deleteQuizQuestion($question_id, $quiz_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("DELETE FROM quiz_questions WHERE id = ? AND quiz_id = ?");
+    return $stmt->execute([$question_id, $quiz_id]);
+}
+
+function deleteQuiz($quiz_id, $lesson_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("DELETE FROM quizzes WHERE id = ? AND lesson_id = ?");
+    return $stmt->execute([$quiz_id, $lesson_id]);
+}
+
+function gradeQuizSubmission($quiz_id, $user_id, $submitted_answers) {
+    global $pdo;
+
+    $quiz = getQuiz($quiz_id, true);
+    if (!$quiz || !(bool)$quiz['is_published']) {
+        return ['success' => false, 'message' => 'Quiz is not available.'];
+    }
+
+    if (!canUserAttemptQuiz($user_id, $quiz)) {
+        return ['success' => false, 'message' => 'You have reached the attempt limit for this quiz.'];
+    }
+
+    $questions = getQuizQuestionsWithAnswers($quiz_id);
+    if (!$questions) {
+        return ['success' => false, 'message' => 'Quiz has no questions yet.'];
+    }
+
+    $score = 0;
+    $max_score = 0;
+    $responses = [];
+
+    foreach ($questions as $question) {
+        $max_score += (int)$question['points'];
+        $selected_answer_id = isset($submitted_answers[$question['id']]) ? (int)$submitted_answers[$question['id']] : null;
+        $selectedIsValid = false;
+        $is_correct = false;
+
+        foreach ($question['answers'] as $answer) {
+            if ($selected_answer_id === (int)$answer['id']) {
+                $selectedIsValid = true;
+                $is_correct = (bool)$answer['is_correct'];
+                break;
+            }
+        }
+
+        if (!$selectedIsValid) {
+            $selected_answer_id = null;
+            $is_correct = false;
+        }
+
+        $points_awarded = $is_correct ? (int)$question['points'] : 0;
+        $score += $points_awarded;
+
+        $responses[] = [
+            'question_id' => (int)$question['id'],
+            'selected_answer_id' => $selected_answer_id,
+            'is_correct' => $is_correct ? 1 : 0,
+            'points_awarded' => $points_awarded
+        ];
+    }
+
+    $percentage = $max_score > 0 ? round(($score / $max_score) * 100, 2) : 0;
+    $passed = $percentage >= (int)$quiz['passing_score'];
+
+    $pdo->beginTransaction();
+
+    try {
+        $attemptStmt = $pdo->prepare("
+            INSERT INTO quiz_attempts (user_id, quiz_id, score, max_score, percentage, passed, submitted_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $attemptStmt->execute([$user_id, $quiz_id, $score, $max_score, $percentage, $passed ? 1 : 0]);
+        $attempt_id = (int)$pdo->lastInsertId();
+
+        $responseStmt = $pdo->prepare("
+            INSERT INTO quiz_attempt_responses (attempt_id, question_id, selected_answer_id, is_correct, points_awarded)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+
+        foreach ($responses as $response) {
+            $responseStmt->execute([
+                $attempt_id,
+                $response['question_id'],
+                $response['selected_answer_id'],
+                $response['is_correct'],
+                $response['points_awarded']
+            ]);
+        }
+
+        $pdo->commit();
+
+        return [
+            'success' => true,
+            'attempt_id' => $attempt_id,
+            'score' => $score,
+            'max_score' => $max_score,
+            'percentage' => $percentage,
+            'passed' => $passed
+        ];
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        return ['success' => false, 'message' => 'Unable to submit the quiz right now.'];
+    }
+}
 ?>
