@@ -79,7 +79,8 @@ $content .= '<p><small>Use the editor toolbar to switch to HTML source editing i
 $content .= '<button type="submit" class="btn btn-primary">Save</button> <a href="lessons.php?course_id=' . $course_id . '" class="btn btn-secondary">Cancel</a>';
 $content .= '</form>';
 
-$content .= '<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>';
+$tinyMceApiKey = defined('TINYMCE_API_KEY') && TINYMCE_API_KEY !== '' ? TINYMCE_API_KEY : 'no-api-key';
+$content .= '<script src="https://cdn.tiny.cloud/1/' . rawurlencode($tinyMceApiKey) . '/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>';
 $content .= '<script>function maybeInitTinyMceLesson() { if (document.getElementById("editor_mode").value === "rich") { tinymce.init({ selector: "#content", menubar: false, plugins: "link image lists code help", toolbar: "undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist outdent indent | link image | code | help", height: 400 }); } else { if (tinymce.get("content")) { tinymce.get("content").remove(); } } }
                         document.getElementById("editor_mode").addEventListener("change", function() { maybeInitTinyMceLesson(); });
                         maybeInitTinyMceLesson();</script>';

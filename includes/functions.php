@@ -40,7 +40,7 @@ function getCourses() {
 
 function getCourse($course_id) {
     global $pdo;
-    $stmt = $pdo->prepare("SELECT id, title, description FROM courses WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, title, description, editor_mode FROM courses WHERE id = ?");
     $stmt->execute([$course_id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
@@ -54,7 +54,7 @@ function getLessons($course_id) {
 
 function getLesson($lesson_id) {
     global $pdo;
-    $stmt = $pdo->prepare("SELECT id, title, content FROM lessons WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, course_id, title, content, order_num, editor_mode FROM lessons WHERE id = ?");
     $stmt->execute([$lesson_id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }

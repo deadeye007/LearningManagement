@@ -47,16 +47,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         session_regenerate_id(true);
         $_SESSION['user_id'] = $_SESSION['temp_user_id'];
         $_SESSION['ip_address'] = $_SESSION['temp_ip'];
-        
+
+        // Preserve username for audit logging
+        $tempUsername = $_SESSION['temp_username'] ?? null;
+
         // Store session in database
         storeUserSession($_SESSION['user_id']);
-        
+
         // Clean up temp data
         unset($_SESSION['temp_user_id'], $_SESSION['temp_username'], $_SESSION['temp_ip']);
-        
+
         // Log successful login
-        logAuditEvent('login_success_2fa', $_SESSION['user_id'], ['username' => $_SESSION['temp_username']]);
-        
+        logAuditEvent('login_success_2fa', $_SESSION['user_id'], ['username' => $tempUsername]);
+
         header('Location: index.php');
         exit;
     } else {

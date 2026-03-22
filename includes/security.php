@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/env.php';
+
 // Security: Error display based on environment
 $env = getenv('APP_ENV') ?: 'production';
 $showErrors = ($env === 'development') ? 1 : 0;

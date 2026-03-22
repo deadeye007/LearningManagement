@@ -14,8 +14,9 @@ A PHP-based learning platform with courses, lessons, quizzes, and user progress 
 ## Setup with Docker
 1. Install Docker and Docker Compose.
 2. Copy `.env.example` to `.env` and update values.
-3. Run `docker-compose up --build` in the project directory.
-4. Open http://localhost:8080 in your browser.
+3. Add your TinyMCE implementation key to `TINYMCE_API_KEY` in `.env` if you want to use the rich text editor without the demo key.
+4. Run `docker-compose up --build` in the project directory.
+5. Open http://localhost:8080 in your browser.
 
 ## Manual Setup (without Docker)
 1. Install PHP and MySQL (e.g., via Homebrew on macOS: `brew install php mysql`).

@@ -44,7 +44,8 @@ $content .= '<p><small>Use the editor toolbar to switch to HTML source editing i
 $content .= '<button type="submit" class="btn btn-primary">Save</button> <a href="courses.php" class="btn btn-secondary">Cancel</a>';
 $content .= '</form>';
 
-$content .= '<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>';
+$tinyMceApiKey = defined('TINYMCE_API_KEY') && TINYMCE_API_KEY !== '' ? TINYMCE_API_KEY : 'no-api-key';
+$content .= '<script src="https://cdn.tiny.cloud/1/' . rawurlencode($tinyMceApiKey) . '/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>';
 $content .= '<script>function maybeInitTinyMce() { if (document.getElementById("editor_mode").value === "rich") { tinymce.init({ selector: "#description", menubar: false, plugins: "link image lists code help", toolbar: "undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist outdent indent | link image | code | help", height: 300 }); } else { if (tinymce.get("description")) { tinymce.get("description").remove(); } } }
                         document.getElementById("editor_mode").addEventListener("change", function() { maybeInitTinyMce(); });
                         maybeInitTinyMce();</script>';
