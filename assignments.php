@@ -88,7 +88,13 @@ if (empty($assignments)) {
             }
             $content .= '<p><strong>Due:</strong> ' . $deadline . ' | <strong>Points:</strong> ' . $a['points_possible'] . '</p>';
             $content .= '</div>';
-            $content .= '<a href="submit_assignment.php?assignment_id=' . $a['id'] . '" class="btn btn-primary">Submit</a>';
+            $content .= '<div class="btn-group" role="group">';
+            $content .= '<a href="assignment_view.php?id=' . $a['id'] . '" class="btn btn-sm btn-info">View</a>';
+            if ($a['assignment_type'] === 'discussion') {
+                $content .= '<a href="discussions.php?aid=' . $a['id'] . '" class="btn btn-sm btn-secondary">Discuss</a>';
+            }
+            $content .= '<a href="submit_assignment.php?assignment_id=' . $a['id'] . '" class="btn btn-primary btn-sm">Submit</a>';
+            $content .= '</div>';
             $content .= '</div></div></div>';
         }
         $content .= '</div>';
@@ -108,9 +114,12 @@ if (empty($assignments)) {
             $content .= '<p class="text-muted"><small>Lesson: ' . htmlspecialchars($a['lesson_title']) . '</small></p>';
             $content .= '<p><strong>Was due:</strong> ' . $deadline . '</p>';
             $content .= '</div>';
+            $content .= '<div class="btn-group" role="group">';
+            $content .= '<a href="assignment_view.php?id=' . $a['id'] . '" class="btn btn-sm btn-info">View</a>';
             if ($a['allow_late_submission_allowed']) {
-                $content .= '<a href="submit_assignment.php?assignment_id=' . $a['id'] . '" class="btn btn-warning">Submit Late</a>';
+                $content .= '<a href="submit_assignment.php?assignment_id=' . $a['id'] . '" class="btn btn-warning btn-sm">Submit Late</a>';
             }
+            $content .= '</div>';
             $content .= '</div></div></div>';
         }
         $content .= '</div>';
@@ -130,7 +139,9 @@ if (empty($assignments)) {
             $content .= '<p class="text-muted"><small>Lesson: ' . htmlspecialchars($a['lesson_title']) . '</small></p>';
             $content .= '<p><strong>Submitted:</strong> ' . $submitted_at . '</p>';
             $content .= '</div>';
-            $content .= '<a href="view_submission.php?submission_id=' . $a['submission']['id'] . '" class="btn btn-info">View</a>';
+            $content .= '<div class="btn-group" role="group">';
+            $content .= '<a href="assignment_view.php?id=' . $a['id'] . '" class="btn btn-sm btn-info">View</a>';
+            $content .= '</div>';
             $content .= '</div></div></div>';
         }
         $content .= '</div>';
@@ -153,7 +164,9 @@ if (empty($assignments)) {
                 $content .= '<p><strong>Feedback:</strong> ' . nl2br(htmlspecialchars(substr($a['submission']['feedback_text'], 0, 200))) . '...</p>';
             }
             $content .= '</div>';
-            $content .= '<a href="view_submission.php?submission_id=' . $a['submission']['id'] . '" class="btn btn-info">View Details</a>';
+            $content .= '<div class="btn-group" role="group">';
+            $content .= '<a href="assignment_view.php?id=' . $a['id'] . '" class="btn btn-sm btn-info">View</a>';
+            $content .= '</div>';
             $content .= '</div></div></div>';
         }
         $content .= '</div>';

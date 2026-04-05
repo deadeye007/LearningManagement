@@ -25,8 +25,8 @@ $content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 
 $content .= '</div>';
 
 $content .= '<div class="row mt-3">';
+$content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 class="card-title">Discussions</h5><p>Manage class discussions, moderate posts, lock/pin threads.</p><a href="discussions.php" class="btn btn-outline-secondary">Manage Discussions</a></div></div></div>';
 $content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 class="card-title">Certificates & Badges</h5><p>Create and manage certificates and achievement badges for learners.</p><a href="certificates_badges.php" class="btn btn-outline-warning">Manage Achievements</a></div></div></div>';
-$content .= '<div class="col-md-6"><div class="card"><div class="card-body"><h5 class="card-title">Announcements & Notifications</h5><p>Send course announcements, platform-wide messages, and grade notifications.</p><a href="announcements.php" class="btn btn-outline-info">Send Announcements</a></div></div></div>';
 $content .= '</div>';
 
 $content .= '<div class="row mt-3">';

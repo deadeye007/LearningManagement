@@ -2088,4 +2088,445 @@ function getStudentSubmissionsSummary($user_id, $course_id) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// ===== DISCUSSION FORUM FUNCTIONS =====
+
+/**
+ * Create a new discussion thread
+ */
+function createDiscussionThread($assignment_id, $course_id, $created_by, $title, $description = '', $allow_anonymous = false) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO discussion_threads (assignment_id, course_id, created_by, title, description, allow_anonymous, last_activity)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([$assignment_id, $course_id, $created_by, $title, $description, $allow_anonymous ? 1 : 0]);
+        
+        $thread_id = $pdo->lastInsertId();
+        
+        // Log audit
+        logAuditEvent($_SESSION['user_id'], 'discussion_thread_created', 'Discussion thread created: ' . $title . ' (ID: ' . $thread_id . ')');
+        
+        return $thread_id;
+    } catch (PDOException $e) {
+        error_log('Error creating discussion thread: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get all discussion threads for an assignment
+ */
+function getAssignmentDiscussions($assignment_id, $sort_by = 'last_activity', $limit = null) {
+    global $pdo;
+    
+    try {
+        $order_by = 'dt.is_pinned DESC, dt.' . ($sort_by === 'recent' ? 'last_activity' : 'created_at') . ' DESC';
+        
+        $sql = "
+            SELECT dt.*, 
+                   u.username as created_by_name,
+                   u.email as created_by_email,
+                   COUNT(dp.id) as post_count,
+                   MAX(dp.created_at) as last_post_date
+            FROM discussion_threads dt
+            LEFT JOIN users u ON dt.created_by = u.id
+            LEFT JOIN discussion_posts dp ON dt.id = dp.thread_id AND dp.is_published = 1
+            WHERE dt.assignment_id = ? AND dt.is_published = 1
+            GROUP BY dt.id
+            ORDER BY {$order_by}
+        ";
+        
+        if ($limit) {
+            $sql .= " LIMIT " . (int)$limit;
+        }
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$assignment_id]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Error fetching discussions: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get a specific discussion thread with details
+ */
+function getDiscussionThread($thread_id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT dt.*, 
+                   u.username as created_by_name,
+                   u.email as created_by_email,
+                   COUNT(dp.id) as post_count
+            FROM discussion_threads dt
+            LEFT JOIN users u ON dt.created_by = u.id
+            LEFT JOIN discussion_posts dp ON dt.id = dp.thread_id AND dp.is_published = 1
+            WHERE dt.id = ?
+            GROUP BY dt.id
+        ");
+        $stmt->execute([$thread_id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Error fetching discussion thread: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Add a post/reply to a discussion thread
+ */
+function createDiscussionPost($thread_id, $assignment_id, $posted_by, $content, $is_anonymous = false, $parent_post_id = null) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO discussion_posts (thread_id, assignment_id, posted_by, content, is_anonymous, parent_post_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$thread_id, $assignment_id, $posted_by, $content, $is_anonymous ? 1 : 0, $parent_post_id]);
+        
+        $post_id = $pdo->lastInsertId();
+        
+        // Update thread reply count and last activity
+        $update_stmt = $pdo->prepare("
+            UPDATE discussion_threads 
+            SET reply_count = reply_count + 1, last_activity = NOW()
+            WHERE id = ?
+        ");
+        $update_stmt->execute([$thread_id]);
+        
+        // Notify subscribers
+        notifyDiscussionReply($thread_id, $assignment_id, $posted_by, $post_id);
+        
+        // Log audit
+        logAuditEvent($_SESSION['user_id'], 'discussion_post_created', 'Discussion post added to thread ID: ' . $thread_id);
+        
+        return $post_id;
+    } catch (PDOException $e) {
+        error_log('Error creating discussion post: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get all posts in a discussion thread
+ */
+function getDiscussionPosts($thread_id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT dp.*,
+                   CASE WHEN dp.is_anonymous = 1 THEN 'Anonymous' ELSE u.username END as posted_by_name,
+                   u.email as posted_by_email,
+                   u.id as actual_user_id,
+                   (SELECT COUNT(*) FROM discussion_engagement WHERE post_id = dp.id AND engagement_type = 'like') as likes_count,
+                   (SELECT COUNT(*) FROM discussion_posts WHERE parent_post_id = dp.id AND is_published = 1) as reply_count
+            FROM discussion_posts dp
+            LEFT JOIN users u ON dp.posted_by = u.id
+            WHERE dp.thread_id = ? AND dp.is_published = 1
+            ORDER BY dp.created_at ASC
+        ");
+        $stmt->execute([$thread_id]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Error fetching discussion posts: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Update a discussion post (edit)
+ */
+function updateDiscussionPost($post_id, $content) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE discussion_posts
+            SET content = ?, edited_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$content, $post_id]);
+        
+        // Log audit
+        logAuditEvent($_SESSION['user_id'], 'discussion_post_edited', 'Discussion post edited: ID ' . $post_id);
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log('Error updating discussion post: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Like/unlike a discussion post
+ */
+function toggleDiscussionPostLike($post_id, $user_id) {
+    global $pdo;
+    
+    try {
+        // Check if user already liked this post
+        $check_stmt = $pdo->prepare("
+            SELECT id FROM discussion_engagement
+            WHERE post_id = ? AND user_id = ? AND engagement_type = 'like'
+        ");
+        $check_stmt->execute([$post_id, $user_id]);
+        $existing = $check_stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($existing) {
+            // Unlike
+            $delete_stmt = $pdo->prepare("
+                DELETE FROM discussion_engagement
+                WHERE post_id = ? AND user_id = ? AND engagement_type = 'like'
+            ");
+            $delete_stmt->execute([$post_id, $user_id]);
+            return 'unliked';
+        } else {
+            // Like
+            $insert_stmt = $pdo->prepare("
+                INSERT INTO discussion_engagement (post_id, user_id, engagement_type)
+                VALUES (?, ?, 'like')
+            ");
+            $insert_stmt->execute([$post_id, $user_id]);
+            return 'liked';
+        }
+    } catch (PDOException $e) {
+        error_log('Error toggling discussion post like: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Subscribe/unsubscribe from a discussion thread
+ */
+function toggleDiscussionSubscription($thread_id, $user_id, $subscription_type = 'all_replies') {
+    global $pdo;
+    
+    try {
+        // Check if already subscribed
+        $check_stmt = $pdo->prepare("
+            SELECT id FROM discussion_subscriptions
+            WHERE thread_id = ? AND user_id = ?
+        ");
+        $check_stmt->execute([$thread_id, $user_id]);
+        $existing = $check_stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($existing) {
+            // Update subscription type or unsubscribe
+            if ($subscription_type === 'none') {
+                $delete_stmt = $pdo->prepare("
+                    DELETE FROM discussion_subscriptions
+                    WHERE thread_id = ? AND user_id = ?
+                ");
+                $delete_stmt->execute([$thread_id, $user_id]);
+            } else {
+                $update_stmt = $pdo->prepare("
+                    UPDATE discussion_subscriptions
+                    SET subscription_type = ?
+                    WHERE thread_id = ? AND user_id = ?
+                ");
+                $update_stmt->execute([$subscription_type, $thread_id, $user_id]);
+            }
+        } else {
+            // Add subscription
+            $insert_stmt = $pdo->prepare("
+                INSERT INTO discussion_subscriptions (thread_id, user_id, subscription_type)
+                VALUES (?, ?, ?)
+            ");
+            $insert_stmt->execute([$thread_id, $user_id, $subscription_type]);
+        }
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log('Error toggling discussion subscription: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get user's subscription status for a thread
+ */
+function getUserSubscriptionStatus($thread_id, $user_id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT subscription_type FROM discussion_subscriptions
+            WHERE thread_id = ? AND user_id = ?
+        ");
+        $stmt->execute([$thread_id, $user_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? $result['subscription_type'] : 'none';
+    } catch (PDOException $e) {
+        error_log('Error fetching subscription status: ' . $e->getMessage());
+        return 'none';
+    }
+}
+
+/**
+ * Check if user has liked a post
+ */
+function hasUserLikedPost($post_id, $user_id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id FROM discussion_engagement
+            WHERE post_id = ? AND user_id = ? AND engagement_type = 'like'
+        ");
+        $stmt->execute([$post_id, $user_id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+/**
+ * Notify subscribers of new reply
+ */
+function notifyDiscussionReply($thread_id, $assignment_id, $posted_by, $post_id) {
+    global $pdo;
+    
+    try {
+        // Get all subscribers
+        $subscribers_stmt = $pdo->prepare("
+            SELECT DISTINCT user_id, subscription_type FROM discussion_subscriptions
+            WHERE thread_id = ? AND user_id != ?
+        ");
+        $subscribers_stmt->execute([$thread_id, $posted_by]);
+        $subscribers = $subscribers_stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Get thread and assignment details
+        $thread = getDiscussionThread($thread_id);
+        $assignment = getAssignment($assignment_id);
+        
+        foreach ($subscribers as $subscriber) {
+            // Check if should notify (all_replies)
+            if ($subscriber['subscription_type'] === 'all_replies') {
+                $notify_stmt = $pdo->prepare("
+                    INSERT INTO discussion_notifications (user_id, thread_id, post_id, notification_type, message)
+                    VALUES (?, ?, ?, 'new_reply', ?)
+                ");
+                
+                $message = "New reply in '{$thread['title']}' discussion in assignment '{$assignment['title']}'";
+                $notify_stmt->execute([$subscriber['user_id'], $thread_id, $post_id, $message]);
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('Error notifying discussion subscribers: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Get unread discussion notifications for a user
+ */
+function getUserDiscussionNotifications($user_id, $limit = 10) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT dn.*, 
+                   dt.title as thread_title,
+                   dp.content as post_preview
+            FROM discussion_notifications dn
+            LEFT JOIN discussion_threads dt ON dn.thread_id = dt.id
+            LEFT JOIN discussion_posts dp ON dn.post_id = dp.id
+            WHERE dn.user_id = ? AND dn.is_read = 0
+            ORDER BY dn.created_at DESC
+            LIMIT ?
+        ");
+        $stmt->execute([$user_id, $limit]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Error fetching discussion notifications: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Mark notification as read
+ */
+function markDiscussionNotificationAsRead($notification_id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE discussion_notifications
+            SET is_read = 1, read_at = NOW()
+            WHERE id = ?
+        ");
+        return $stmt->execute([$notification_id]);
+    } catch (PDOException $e) {
+        error_log('Error marking notification as read: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Pin/unpin a discussion thread (instructor only)
+ */
+function toggleThreadPin($thread_id, $pin = true) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE discussion_threads
+            SET is_pinned = ?
+            WHERE id = ?
+        ");
+        return $stmt->execute([$pin ? 1 : 0, $thread_id]);
+    } catch (PDOException $e) {
+        error_log('Error toggling thread pin: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Lock/unlock a discussion thread (instructor only)
+ */
+function toggleThreadLock($thread_id, $lock = true) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE discussion_threads
+            SET is_locked = ?
+            WHERE id = ?
+        ");
+        return $stmt->execute([$lock ? 1 : 0, $thread_id]);
+    } catch (PDOException $e) {
+        error_log('Error toggling thread lock: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Delete a discussion post
+ */
+function deleteDiscussionPost($post_id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE discussion_posts
+            SET is_published = 0
+            WHERE id = ?
+        ");
+        
+        // Log audit
+        logAuditEvent($_SESSION['user_id'], 'discussion_post_deleted', 'Discussion post deleted: ID ' . $post_id);
+        
+        return $stmt->execute([$post_id]);
+    } catch (PDOException $e) {
+        error_log('Error deleting discussion post: ' . $e->getMessage());
+        return false;
+    }
+}
+
 ?>
