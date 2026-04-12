@@ -112,6 +112,4 @@ function downloadCertificate() {
     printWindow.print();
 }
 </script>
-
-<?php include 'includes/header.php'; ?></content>
 <parameter name="filePath">/Users/asturm/Projects/PHP Project/certificate.php

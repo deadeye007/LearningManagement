@@ -47,5 +47,4 @@ if ($responses) {
     }
 }
 
-include 'includes/header.php';
 ?>

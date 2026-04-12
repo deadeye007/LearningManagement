@@ -87,5 +87,3 @@ include 'includes/header.php';
         </div>
     </div>
 </main>
-
-<?php include 'includes/header.php'; ?>

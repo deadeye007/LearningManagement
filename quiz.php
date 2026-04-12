@@ -96,5 +96,4 @@ foreach ($questions as $index => $question) {
 $content .= '<button type="submit" class="btn btn-primary">Submit Quiz</button>';
 $content .= '</form>';
 
-include 'includes/header.php';
 ?>
