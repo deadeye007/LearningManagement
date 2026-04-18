@@ -15,9 +15,10 @@ if ($courses) {
     $content .= '<div class="table-responsive"><table class="table table-striped">';
     $content .= '<thead><tr><th>Title</th><th>Description</th><th>Actions</th></tr></thead><tbody>';
     foreach ($courses as $course) {
+        $course_description = strip_tags(html_entity_decode(substr($course['description'], 0, 100), ENT_QUOTES | ENT_HTML5, 'UTF-8'), '<strong><em><b><i><u>');
         $content .= '<tr>';
         $content .= '<td>' . htmlspecialchars($course['title']) . '</td>';
-        $content .= '<td>' . htmlspecialchars(substr($course['description'], 0, 100)) . '...</td>';
+        $content .= '<td>' . $course_description . '...</td>';
         $content .= '<td>';
         $content .= '<a href="course_edit.php?id=' . $course['id'] . '" class="btn btn-sm btn-primary">Edit</a> ';
         $content .= '<a href="lessons.php?course_id=' . $course['id'] . '" class="btn btn-sm btn-secondary">Lessons</a> ';
