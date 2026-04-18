@@ -49,7 +49,7 @@ if ($tab === 'inbox') {
 
 $total_pages = ceil($total / $limit);
 
-include 'includes/header.php';
+ob_start();
 ?>
 
 <main class="container my-4">
@@ -192,4 +192,13 @@ include 'includes/header.php';
             <?php endif; ?>
         </div>
     </div>
+<<<<<<< Updated upstream
 </main>
+=======
+</main>
+
+<?php
+$content = ob_get_clean();
+include 'includes/header.php';
+?>
+>>>>>>> Stashed changes

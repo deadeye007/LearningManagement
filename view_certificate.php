@@ -30,7 +30,7 @@ $title = 'Certificate: ' . htmlspecialchars($certificate['title']);
 // Generate certificate HTML
 $certificate_html = generateCertificateHTML($certificate['certificate_id'], $user_id);
 
-include 'includes/header.php';
+ob_start();
 ?>
 
 <main class="container my-4">
@@ -112,4 +112,12 @@ function downloadCertificate() {
     printWindow.print();
 }
 </script>
+<<<<<<< Updated upstream
 <parameter name="filePath">/Users/asturm/Projects/PHP Project/certificate.php
+=======
+
+<?php
+$content = ob_get_clean();
+include 'includes/header.php';
+?>
+>>>>>>> Stashed changes

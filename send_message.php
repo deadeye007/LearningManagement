@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     }
 }
 
-include 'includes/header.php';
+ob_start();
 ?>
 
 <main class="container my-4">
@@ -86,4 +86,13 @@ include 'includes/header.php';
             </div>
         </div>
     </div>
+<<<<<<< Updated upstream
 </main>
+=======
+</main>
+
+<?php
+$content = ob_get_clean();
+include 'includes/header.php';
+?>
+>>>>>>> Stashed changes

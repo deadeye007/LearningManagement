@@ -34,7 +34,7 @@ $other_user_id = $message['sender_id'] === $user_id ? $message['recipient_id'] :
 $other_user = getUser($other_user_id);
 $conversation = getConversation($user_id, $other_user_id);
 
-include 'includes/header.php';
+ob_start();
 ?>
 
 <main class="container my-4">
@@ -99,4 +99,13 @@ include 'includes/header.php';
             </div>
         </div>
     </div>
+<<<<<<< Updated upstream
 </main>
+=======
+</main>
+
+<?php
+$content = ob_get_clean();
+include 'includes/header.php';
+?>
+>>>>>>> Stashed changes
